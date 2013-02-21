@@ -1,28 +1,59 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
-#include <fcntl.h>
 #include <string.h>
 #include <stdint.h>
 #include <sys/types.h>
+#include <sys/uio.h>
+#include <unistd.h>
 
+#include "hashmap/hashmap.h"
 #include "bson_parser.h"
 
 #define INITIAL_BUFFER_SIZE 2
 
-int parse_bson_byte(char* buf, uint32_t *bytes_read, char* result)
+struct bson_container* create_bson_container(enum BSON_TYPE type)
+{
+    struct bson_container* result = calloc(sizeof(struct bson_container), 1);
+    result->type = type;
+    return result;
+}
+
+void free_bson_container(struct bson_container* container)
+{
+}
+
+int parse_bson_byte(char* buf, uint32_t* bytes_read, unsigned char* result)
 {
     if (buf == NULL)
         return -1;
-    *result = buf[0];
+    char* pbuf;
+    pbuf = buf + *bytes_read;
+    *result = pbuf[0];
     *bytes_read = *bytes_read + 1;
     return 1;
 }
 
-int parse_bson_int(char* buf, uint32_t *bytes_read, int* result)
+int parse_bson_boolean(char* buf, uint32_t* bytes_read, bool* result)
+{
+    char* pbuf;
+    pbuf = buf + *bytes_read;
+    if (pbuf[0] == 0) {
+        *result = false;
+    } else if (pbuf[0] == 1) {
+        *result = true;
+    } else {
+        return -1;
+    }
+    return 1;
+}
+
+int parse_bson_int(char* buf, uint32_t* bytes_read, int* result)
 {
     int32_t a,b,c,d;
-    a = buf[0]; b = buf[1]; c = buf[2]; d = buf[3];
+    char* pbuf;
+    pbuf = buf + *bytes_read;
+    a = pbuf[0]; b = pbuf[1]; c = pbuf[2]; d = pbuf[3];
     *result = a + (b << 8) + (c << 16) + (d << 24);
     *bytes_read = *bytes_read + 4;
     return 1;
@@ -33,13 +64,15 @@ int parse_bson_int(char* buf, uint32_t *bytes_read, int* result)
 int parse_bson_cstring(char* buf, uint32_t *bytes_read, char** result)
 {
     char* rbuf;
+    char* pbuf;
     char c;
     uint32_t cnt;
     uint32_t buf_size = INITIAL_BUFFER_SIZE;
+    pbuf = buf + *bytes_read;
     rbuf = calloc(buf_size, sizeof(char));
     cnt = 0;
     do {
-        c = buf[cnt];
+        c = pbuf[cnt];
         if (cnt == buf_size) {
             void* tmp = NULL;
             buf_size = buf_size * 2;
@@ -58,80 +91,104 @@ int parse_bson_cstring(char* buf, uint32_t *bytes_read, char** result)
     return cnt;
 }
 
+int parse_bson_binary(char* buf, uint32_t* bytes_read, char** result)
+{
+    int32_t bin_length;
+    unsigned char bin_subtype;
+    char* rbuf;
+    char* pbuf = buf + *bytes_read;
+    parse_bson_int(buf, bytes_read, &bin_length);
+    parse_bson_byte(buf, bytes_read, &bin_subtype);
+    rbuf = malloc(bin_length);
+    memcpy(rbuf, pbuf, bin_length);
+    *result = rbuf;
+    *bytes_read = *bytes_read + bin_length;
+    return bin_length;
+}
+
 int parse_bson_double(char* buf, uint32_t* bytes_read, double* result)
 {
     /* TODO */
-    *bytes_read = 8;
+    *bytes_read = *bytes_read + 8;
+    return 1;
 }
 
-int parse_bson_array(char* buf, ssize_t len, struct iomsg* result)
+int parse_bson_document(char* buf, uint32_t* bytes_read, map_t* result)
 {
-    
-}
-
-int parse_bson_document(char* buf, ssize_t len, struct iotmsg* result)
-{
-    char *pbuf;
     int32_t error;
-    uint32_t total_bytes_read;
-    uint32_t bytes_read;
-
-    uint32_t doc_len;
+    int32_t doc_len;
     char* key;
-    char value_type;
-    char* value_str;
-    uint32_t value_int32;
-    uint32_t value_len;
+    unsigned char value_type;
+    uint32_t initial_bytes;
+    int32_t value_len;
     double value_double;
 
-    pbuf = (char *) buf;
-    error = parse_bson_int(pbuf, &bytes_read, &doc_len);
-    pbuf = buf + bytes_read;
+    initial_bytes = *bytes_read;
+    error = parse_bson_int(buf, bytes_read, &doc_len);
     printf("Document length: %d bytes\n", doc_len);
 
-    while (bytes_read < doc_len) {
-        parse_bson_byte(pbuf, &bytes_read, &value_type);
-        pbuf = buf + bytes_read;
+    while ((*bytes_read - initial_bytes) < doc_len) {
+        BSON_Container cont;
+        parse_bson_byte(buf, bytes_read, &value_type);
         if (value_type == 0) {
-            return;
+            printf("return");
+            return 1;
         }
-        parse_bson_cstring(pbuf, &bytes_read, &key);
-        pbuf = buf + bytes_read;
+        parse_bson_cstring(buf, bytes_read, &key);
+
         printf("type: '%d' key: '%s'\n", value_type, key);
+
         switch(value_type) {
             case BSON_DOUBLE: 
                 printf("double\n");
-                parse_bson_double(pbuf, &bytes_read, &value_double);
-                pbuf = buf + bytes_read;
+                parse_bson_double(buf, bytes_read, &value_double);
                 break;
             case BSON_STRING:
                 printf("string\n");
-                parse_bson_int(pbuf, &bytes_read, &value_len);
-                pbuf = buf + bytes_read;
-                parse_bson_cstring(pbuf, &bytes_read, &value_str);
-                pbuf = buf + bytes_read;
-                printf("%d '%s'\n", value_len, value_str);
+                parse_bson_int(buf, bytes_read, &value_len);
+                cont = create_bson_container(BSON_STRING);
+                parse_bson_cstring(buf, bytes_read, &cont->data.value_str);
+                hashmap_put(result, key, cont);
+                printf("%d '%s'\n", value_len, cont->data.value_str);
                 break;
-            /* Arrays and objects are */
+            /* Arrays are handled as documents where each key is an empty string */
             case BSON_ARRAY:
-                parse_bson_array(pbuf, len - bytes_read, result);
+                printf("array\n");
+                cont = create_bson_container(BSON_DOCUMENT);
+                cont->data.value_document = hashmap_new();
+                parse_bson_document(buf, bytes_read, cont->data.value_document);
+                hashmap_put(result, key, cont);
+                break;
             case BSON_DOCUMENT:
-                printf("object or array\n");
-                parse_bson_document(pbuf, len - bytes_read, result);
+                printf("object\n");
+                cont = create_bson_container(BSON_DOCUMENT);
+                cont->data.value_document = hashmap_new();
+                parse_bson_document(buf, bytes_read, cont->data.value_document);
+                hashmap_put(result, key, cont);
                 break;
             case BSON_BINARY: 
                 printf("binary");
+                cont = create_bson_container(BSON_BINARY);
+                parse_bson_binary(buf, bytes_read, &cont->data.value_binary);
+                hashmap_put(result, key, cont);
                 break;
             case BSON_BOOLEAN:
                 printf("boolean\n");
+                cont = create_bson_container(BSON_BOOLEAN);
+                parse_bson_boolean(buf, bytes_read, &cont->data.value_boolean);
+                hashmap_put(result, key, cont);
                 break;
             case BSON_NULL:
                 printf("null\n");
+                cont = create_bson_container(BSON_NULL);
+                hashmap_put(result, key, cont);
                 break;
             case BSON_INT32:
-                printf("int32\n");
-                parse_bson_int(pbuf, &bytes_read, &value_int32);
-                pbuf = buf + bytes_read;
+                printf("int32: ");
+                cont = create_bson_container(BSON_INT32);
+                parse_bson_int(buf, bytes_read, &cont->data.value_int32);
+                printf("parsed int: %d\n", cont->data.value_int32);
+                hashmap_put(result, key, cont);
                 break;
             case BSON_TIMESTAMP:
                 printf("timestamp\n");
@@ -139,27 +196,20 @@ int parse_bson_document(char* buf, ssize_t len, struct iotmsg* result)
             case BSON_INT64:
                 printf("int64\n");
                 break;
+            case BSON_MIN_KEY:
+                cont = create_bson_container(BSON_MIN_KEY);
+                hashmap_put(result, key, cont);
+                break;
+            case BSON_MAX_KEY:
+                cont = create_bson_container(BSON_MAX_KEY);
+                hashmap_put(result, key, cont);
+                break;
             default:
+                printf("unknown type: %d\n", value_type);
                 assert(0);
                 break;
         }
-
-
     }
+    return -1;
 }
 
-int main(int argc, const char *argv[])
-{
-    int fd;
-    char buf[200];
-    memset(buf, 0, 200);
-    printf("open %s\n", argv[1]);
-    fd = open(argv[1], O_RDONLY);
-    if (fd == -1) {
-        perror("open");
-        return EXIT_FAILURE;
-    }
-    read(fd, buf,  20);
-    parse_bson_document(buf, 20, NULL);
-    return EXIT_SUCCESS;
-}
