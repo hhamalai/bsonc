@@ -149,7 +149,6 @@ int parse_bson_document(char* buf, uint32_t* bytes_read, map_t* result)
                 hashmap_put(result, key, cont);
                 printf("%d '%s'\n", value_len, cont->data.value_str);
                 break;
-            /* Arrays are handled as documents where each key is an empty string */
             case BSON_ARRAY:
                 printf("array\n");
                 cont = create_bson_container(BSON_DOCUMENT);
