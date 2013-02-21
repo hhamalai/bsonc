@@ -4,8 +4,6 @@
 #include <string.h>
 #include <stdint.h>
 #include <sys/types.h>
-#include <sys/uio.h>
-#include <unistd.h>
 
 #include "hashmap/hashmap.h"
 #include "bson_parser.h"

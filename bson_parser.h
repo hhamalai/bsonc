@@ -2,6 +2,8 @@
 
 #define BSON_PARSER_H
 
+#include <stdlib.h>
+#include <stdint.h>
 #include <stdbool.h>
 
 #include "hashmap/hashmap.h"
