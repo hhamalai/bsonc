@@ -17,8 +17,29 @@ struct bson_container* create_bson_container(enum BSON_TYPE type)
     return result;
 }
 
-void free_bson_container(struct bson_container* container)
+void free_bson_container(BSON_Container container)
 {
+    if (! container) {
+        return;
+    }
+    switch(container->type) {
+        case BSON_STRING:
+            free(container->data.value_str);
+            break;
+        case BSON_BINARY:
+            free(container->data.value_binary);
+            break;
+        case BSON_DOCUMENT:
+        case BSON_ARRAY:
+            /*XXX: Iterate over document keys, recursively freeing any
+             * encountered documents and arrays
+             */
+            //free_bson_container(container->data.value_document);
+            break;
+        default:
+            break;
+    }
+    return;
 }
 
 int parse_bson_byte(char* buf, uint32_t* bytes_read, unsigned char* result)
@@ -48,11 +69,9 @@ int parse_bson_boolean(char* buf, uint32_t* bytes_read, bool* result)
 
 int parse_bson_int(char* buf, uint32_t* bytes_read, int* result)
 {
-    int32_t a,b,c,d;
     char* pbuf;
     pbuf = buf + *bytes_read;
-    a = pbuf[0]; b = pbuf[1]; c = pbuf[2]; d = pbuf[3];
-    *result = a + (b << 8) + (c << 16) + (d << 24);
+    memcpy(result, pbuf, 4);
     *bytes_read = *bytes_read + 4;
     return 1;
 }
@@ -106,7 +125,9 @@ int parse_bson_binary(char* buf, uint32_t* bytes_read, char** result)
 
 int parse_bson_double(char* buf, uint32_t* bytes_read, double* result)
 {
-    /* TODO */
+    char* pbuf;
+    pbuf = buf + *bytes_read;
+    memcpy(result, pbuf, 8);
     *bytes_read = *bytes_read + 8;
     return 1;
 }
@@ -138,8 +159,9 @@ int parse_bson_document(char* buf, uint32_t* bytes_read, map_t* result)
 
         switch(value_type) {
             case BSON_DOUBLE: 
-                printf("double\n");
+                printf("double: ");
                 parse_bson_double(buf, bytes_read, &value_double);
+                printf("%f\n", value_double);
                 break;
             case BSON_STRING:
                 printf("string\n");
