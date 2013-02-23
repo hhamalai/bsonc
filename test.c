@@ -19,10 +19,11 @@ int main(int argc, const char *argv[])
         perror("open");
         return EXIT_FAILURE;
     }
+
     read(fd, buf,  200);
-    map_t* map = hashmap_new();
+    BSON_Object map = hashmap_new();
 
     parse_bson_document(buf, &bytes_read, map);
-
+    free_bson_object(map);
     return EXIT_SUCCESS;
 }

@@ -1,6 +1,8 @@
 bsonc
 =====
 
-a BSON library
+A BSON library
 
-- uses simpl hashmap implementation by http://github.com/petewarden/c_hashmap
+
+- parses a BSON encoded document into a object like structure in C
+- uses simple hashmap implementation by http://github.com/petewarden/c_hashmap

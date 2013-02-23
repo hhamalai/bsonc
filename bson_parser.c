@@ -17,13 +17,21 @@ struct bson_container* create_bson_container(enum BSON_TYPE type)
     return result;
 }
 
-void free_bson_container(BSON_Container container)
+void free_bson_object(BSON_Object object)
 {
-    if (! container) {
-        return;
+    hashmap_iterate(object, free_map_iter, NULL);
+    free(object);
+}
+
+int free_map_iter(any_t item, any_t elem) 
+{
+    if (! elem) {
+        return MAP_OK;
     }
+    BSON_Container container = (BSON_Container) elem;
     switch(container->type) {
         case BSON_STRING:
+            printf("freeing %s\n", container->data.value_str);
             free(container->data.value_str);
             break;
         case BSON_BINARY:
@@ -31,15 +39,14 @@ void free_bson_container(BSON_Container container)
             break;
         case BSON_DOCUMENT:
         case BSON_ARRAY:
-            /*XXX: Iterate over document keys, recursively freeing any
-             * encountered documents and arrays
-             */
-            //free_bson_container(container->data.value_document);
+            printf("freeing subdocument\n");
+            hashmap_iterate(container->data.value_document, free_map_iter, NULL);
+            hashmap_free(container->data.value_document);
             break;
         default:
             break;
     }
-    return;
+    return MAP_OK;
 }
 
 int parse_bson_byte(char* buf, uint32_t* bytes_read, unsigned char* result)
@@ -132,7 +139,7 @@ int parse_bson_double(char* buf, uint32_t* bytes_read, double* result)
     return 1;
 }
 
-int parse_bson_document(char* buf, uint32_t* bytes_read, map_t* result)
+int parse_bson_document(char* buf, uint32_t* bytes_read, BSON_Object result)
 {
     int32_t error;
     int32_t doc_len;
