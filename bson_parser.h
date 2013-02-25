@@ -33,6 +33,7 @@ enum BSON_TYPE {
 
 struct bson_container {
     enum BSON_TYPE type;
+    uint32_t data_length;
     union _data {
         double value_double;
         char* value_str;
@@ -50,8 +51,8 @@ typedef map_t* BSON_Object;
 BSON_Container create_bson_container(enum BSON_TYPE);
 void free_bson_container(BSON_Container);
 void free_bson_object(BSON_Object);
-int free_map_iter(any_t item, any_t elem);
+int32_t free_map_iter(any_t item, any_t elem);
 
-int parse_bson_document(char* buf, uint32_t* bytes_read, BSON_Object result);
+int32_t parse_bson_document(char* buf, uint32_t* bytes_read, uint32_t buffer_size, BSON_Object result);
 
 #endif /* end of include guard: BSON_PARSER_H */
