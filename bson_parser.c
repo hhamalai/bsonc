@@ -20,7 +20,7 @@ struct bson_container* create_bson_container(enum BSON_TYPE type)
 void free_bson_object(BSON_Object object)
 {
     hashmap_iterate(object, free_map_iter, NULL);
-    free(object);
+    hashmap_free(object);
 }
 
 int32_t free_map_iter(any_t item, any_t elem) 
