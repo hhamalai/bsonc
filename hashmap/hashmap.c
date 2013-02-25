@@ -345,6 +345,19 @@ int hashmap_iterate(map_t in, PFany f, any_t item) {
     return MAP_OK;
 }
 
+void hashmap_clear_keys(map_t in) {
+    int i;
+    hashmap_map* m = (hashmap_map*) in;
+    if (hashmap_length(m) <= 0) {
+        return;
+    }
+    for(i = 0; i < m->table_size; i++) {
+        if(m->data[i].in_use != 0) {
+            free(m->data[i].key);
+        }
+    }
+}
+
 /*
  * Remove an element with that key from the map
  */

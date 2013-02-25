@@ -20,6 +20,7 @@ struct bson_container* create_bson_container(enum BSON_TYPE type)
 void free_bson_object(BSON_Object object)
 {
     hashmap_iterate(object, free_map_iter, NULL);
+    hashmap_clear_keys(object);
     hashmap_free(object);
 }
 
@@ -31,7 +32,7 @@ int32_t free_map_iter(any_t item, any_t elem)
     BSON_Container container = (BSON_Container) elem;
     switch(container->type) {
         case BSON_STRING:
-            printf("freeing str");
+            printf("freeing str\n");
             free(container->data.value_str);
             break;
         case BSON_BINARY:
@@ -114,6 +115,7 @@ int32_t parse_bson_cstring(char* buf, uint32_t *bytes_read, uint32_t buf_size, c
     pbuf = buf + *bytes_read;
     rbuf = calloc(cur_buf_size, sizeof(char));
     cnt = 0;
+    printf("reading str\n");
     do {
         c = pbuf[cnt];
         if (cnt == cur_buf_size) {
